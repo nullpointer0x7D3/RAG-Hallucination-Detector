@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical RAG Hallucination Detector</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --secondary-blue: #1e40af;
+            --light-blue: #dbeafe;
+            --very-light-blue: #f0f9ff;
+            --medical-green: #059669;
+            --success-green: #10b981;
+            --text-dark: #1f2937;
+            --text-light: #6b7280;
+            --border-light: #e5e7eb;
+            --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            --warning-orange: #f59e0b;
+            --danger-red: #ef4444;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--very-light-blue) 0%, #ffffff 100%);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-dark);
+            min-height: 100vh;
+        }
+
+        .medical-header {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-blue) 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .main-container {
+            display: flex;
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        .chat-container {
+            flex: 1;
+            max-width: 800px;
+            padding: 2rem;
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-light);
+            height: fit-content;
+        }
+
+        .side-panel {
+            width: 450px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-light);
+            height: fit-content;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            display: none;
+        }
+
+        .side-panel.active {
+            display: block;
+        }
+
+        .side-panel-header {
+            background: linear-gradient(135deg, var(--medical-green) 0%, var(--success-green) 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 20px 20px 0 0;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .side-panel-content {
+            padding: 1.5rem;
+        }
+
+        .retrieval-item {
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .retrieval-item:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .retrieval-header {
+            background: var(--very-light-blue);
+            padding: 1rem;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .retrieval-header.primary {
+            background: linear-gradient(135deg, var(--light-blue) 0%, var(--very-light-blue) 100%);
+            border-left: 4px solid var(--primary-blue);
+        }
+
+        .retrieval-content {
+            padding: 1rem;
+            background: white;
+            border-top: 1px solid var(--border-light);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .score-badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .score-excellent { background: #dcfce7; color: #166534; }
+        .score-good { background: #fef3c7; color: #92400e; }
+        .score-fair { background: #fed7aa; color: #9a3412; }
+        .score-poor { background: #fecaca; color: #991b1b; }
+
+        .primary-badge {
+            background: var(--primary-blue);
+            color: white;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .chat-heading {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .chat-subtitle {
+            text-align: center;
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 0;
+        }
+
+        .feature-badges {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+
+        .badge-custom {
+            background: var(--light-blue);
+            color: var(--primary-blue);
+            padding: 0.5rem 1rem;
+            border-radius: 25px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            border: 1px solid var(--primary-blue);
+        }
+
+        .chat-input {
+            margin: 1.5rem 0;
+            height: 120px;
+            border: 2px solid var(--border-light);
+            border-radius: 15px;
+            padding: 1rem;
+            font-size: 1rem;
+            resize: vertical;
+            transition: all 0.3s ease;
+        }
+
+        .chat-input:focus {
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            outline: none;
+        }
+
+        .chat-button {
+            background: linear-gradient(135deg, var(--medical-green) 0%, var(--success-green) 100%);
+            color: white;
+            padding: 0.8rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+        }
+
+        .chat-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(5, 150, 105, 0.4);
+            background: linear-gradient(135deg, var(--success-green) 0%, var(--medical-green) 100%);
+        }
+
+        .chat-response {
+            background: var(--very-light-blue);
+            border: 1px solid var(--light-blue);
+            padding: 1.5rem;
+            border-radius: 15px;
+            min-height: 100px;
+            margin-top: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .accordion {
+            margin: 2rem 0;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 1px solid var(--border-light);
+        }
+
+        .accordion-button {
+            color: var(--text-dark);
+            background: var(--very-light-blue);
+            border: none;
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .accordion-button:not(.collapsed) {
+            background: var(--primary-blue);
+            color: white;
+        }
+
+        .accordion-button:focus {
+            box-shadow: none;
+        }
+
+        .accordion-body {
+            color: var(--text-dark);
+            background: white;
+            padding: 1.5rem;
+            line-height: 1.6;
+        }
+
+        .processing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary-blue);
+            font-weight: 500;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--light-blue);
+            border-top: 2px solid var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .source-info {
+            background: #f8fafc;
+            border-left: 4px solid var(--medical-green);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .source-label {
+            font-weight: 600;
+            color: var(--medical-green);
+            margin-bottom: 0.5rem;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-light);
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .medical-icon {
+            color: var(--medical-green);
+        }
+
+        .toggle-panel-btn {
+            position: fixed;
+            right: 2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 1rem;
+            box-shadow: var(--shadow);
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-panel-btn:hover {
+            background: var(--secondary-blue);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        @media (max-width: 1200px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .side-panel {
+                width: 100%;
+                max-width: 800px;
+                margin: 0 auto;
+            }
+            
+            .toggle-panel-btn {
+                position: static;
+                transform: none;
+                margin: 1rem auto;
+                display: block;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                margin: 1rem;
+                padding: 1.5rem;
+            }
+            
+            .chat-heading {
+                font-size: 2rem;
+            }
+            
+            .feature-badges {
+                gap: 0.5rem;
+            }
+            
+            .badge-custom {
+                font-size: 0.8rem;
+                padding: 0.4rem 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="medical-header">
+        <div class="container">
+            <h1 class="chat-heading">
+                <i class="fas fa-stethoscope medical-icon"></i>
+                Medical RAG Hallucination Detector
+            </h1>
+            <p class="chat-subtitle">Using RAGAS To Detect Harmful Hallucinations</p>
+        </div>
+    </div>
+
+    <button class="toggle-panel-btn" id="togglePanel" style="display: none;">
+        <i class="fas fa-chart-bar"></i>
+    </button>
+
+    <div class="main-container">
+        <div class="chat-container">
+            <div class="feature-badges">
+                <span class="badge-custom">
+                    <i class="fas fa-brain"></i> Meditron-7B LLM
+                </span>
+                <span class="badge-custom">
+                    <i class="fas fa-search"></i> PubMedBERT Embeddings
+                </span>
+                <span class="badge-custom">
+                    <i class="fas fa-database"></i> Qdrant Vector Store
+                </span>
+                <span class="badge-custom">
+                    <i class="fas fa-shield-alt"></i> RAGAS
+                </span>
+            </div>
+
+            <div class="accordion" id="appDescriptionAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="descriptionHeading">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDescription" aria-expanded="false" aria-controls="collapseDescription">
+                            <i class="fas fa-info-circle me-2"></i>
+                            About This Medical RAG System
+                        </button>
+                    </h2>
+                    <div id="collapseDescription" class="accordion-collapse collapse" aria-labelledby="descriptionHeading" data-bs-parent="#appDescriptionAccordion">
+                        <div class="accordion-body">
+                            <p><strong>Advanced Medical AI Assistant</strong> powered by cutting-edge open-source technologies:</p>
+                            <ul>
+                                <li><strong>Meditron-7B:</strong> Medical-specialized language model for accurate healthcare responses</li>
+                                <li><strong>PubMedBERT:</strong> Medical literature embeddings for precise document retrieval</li>
+                                <li><strong>Qdrant:</strong> High-performance vector database for semantic search</li>
+                                <li><strong>LangChain:</strong> Robust RAG orchestration framework</li>
+                                <li><strong>RAGAS:</strong> Comprehensive RAG Hallucination Detector Framework</li>
+                            </ul>
+                            <p class="mb-0"><em>All responses include source document attribution for the following dataset "xxx"</em></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col">
+                    <label for="userInput" class="form-label fw-semibold">
+                        <i class="fas fa-question-circle me-2"></i>
+                        Ask your medical question:
+                    </label>
+                    <textarea 
+                        id="userInput" 
+                        class="form-control chat-input" 
+                        placeholder="e.g., What are the side effects of chemotherapy? What causes cancer? How is diabetes treated?"
+                    ></textarea>
+                    <button id="submitBtn" class="btn chat-button">
+                        <i class="fas fa-paper-plane me-2"></i>
+                        Get Medical Answer
+                    </button>
+                    <div id="response" class="chat-response" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="side-panel" id="sidePanel">
+            <div class="side-panel-header">
+                <h4 class="mb-1">
+                    <i class="fas fa-search me-2"></i>
+                    Retrieval Analysis
+                </h4>
+                <small>Detailed source document analysis and similarity scores</small>
+            </div>
+            <div class="side-panel-content" id="sidePanelContent">
+                <p class="text-muted text-center">Submit a query to see detailed retrieval information</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function getScoreClass(score) {
+            if (score >= 0.8) return 'score-excellent';
+            if (score >= 0.6) return 'score-good';
+            if (score >= 0.4) return 'score-fair';
+            return 'score-poor';
+        }
+
+        function getScoreLabel(score) {
+            if (score >= 0.8) return 'Excellent Match';
+            if (score >= 0.6) return 'Good Match';
+            if (score >= 0.4) return 'Fair Match';
+            return 'Poor Match';
+        }
+
+        function formatScore(score) {
+            return (score * 100).toFixed(1) + '%';
+        }
+
+        function truncateText(text, maxLength = 150) {
+            if (text.length <= maxLength) return text;
+            return text.substring(0, maxLength) + '...';
+        }
+
+        function updateSidePanel(data) {
+            const sidePanelContent = document.getElementById('sidePanelContent');
+            const sidePanel = document.getElementById('sidePanel');
+            const toggleBtn = document.getElementById('togglePanel');
+
+            if (!data.all_retrievals || data.all_retrievals.length === 0) {
+                sidePanelContent.innerHTML = '<p class="text-muted text-center">No retrieval data available</p>';
+                return;
+            }
+
+            let html = `
+                <div class="mb-3">
+                    <h6><i class="fas fa-question-circle me-2"></i>Query:</h6>
+                    <p class="text-muted">"${data.query}"</p>
+                </div>
+                
+                <div class="mb-3">
+                    <h6><i class="fas fa-chart-bar me-2"></i>Retrieved Documents: ${data.total_retrievals}</h6>
+                </div>
+            `;
+
+            data.all_retrievals.forEach((retrieval, index) => {
+                const scoreClass = getScoreClass(retrieval.score);
+                const scoreLabel = getScoreLabel(retrieval.score);
+                const isPrimary = retrieval.is_primary;
+
+                html += `
+                    <div class="retrieval-item">
+                        <div class="retrieval-header ${isPrimary ? 'primary' : ''}" onclick="toggleRetrievalContent(${index})">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="fw-bold">Rank #${retrieval.rank}</span>
+                                    ${isPrimary ? '<span class="primary-badge">Used in Answer</span>' : ''}
+                                </div>
+                                <div class="small text-muted">
+                                    <i class="fas fa-file-medical me-1"></i>
+                                    ${retrieval.source} ${retrieval.page !== 'N/A' ? `(Page ${retrieval.page})` : ''}
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div class="score-badge ${scoreClass} mb-1">${formatScore(retrieval.score)}</div>
+                                <div class="small text-muted">${scoreLabel}</div>
+                            </div>
+                        </div>
+                        <div class="retrieval-content" id="retrievalContent${index}" style="display: none;">
+                            <p class="mb-0">${retrieval.content}</p>
+                        </div>
+                    </div>
+                `;
+            });
+
+            sidePanelContent.innerHTML = html;
+            sidePanel.classList.add('active');
+            toggleBtn.style.display = 'block';
+        }
+
+        function toggleRetrievalContent(index) {
+            const content = document.getElementById(`retrievalContent${index}`);
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
+        }
+
+        document.getElementById('togglePanel').addEventListener('click', function() {
+            const sidePanel = document.getElementById('sidePanel');
+            sidePanel.classList.toggle('active');
+        });
+
+        document.getElementById('submitBtn').addEventListener('click', async function() {
+            var userInput = document.getElementById('userInput').value.trim();
+            if (!userInput) {
+                alert('Please enter a medical question.');
+                return;
+            }
+
+            const responseDiv = document.getElementById('response');
+            responseDiv.style.display = 'block';
+            responseDiv.innerHTML = `
+                <div class="processing-indicator">
+                    <div class="spinner"></div>
+                    <span>Processing your medical query...</span>
+                </div>
+            `;
+
+            const formData = new FormData();
+            formData.append('query', userInput); 
+
+            try {
+                const response = await fetch('/get_response', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                
+                responseDiv.innerHTML = `
+                    <div class="mb-3">
+                        <h5><i class="fas fa-robot me-2 text-primary"></i>Medical Answer:</h5>
+                        <p>${data.answer}</p>
+                    </div>
+                    
+                    <div class="source-info">
+                        <div class="source-label">
+                            <i class="fas fa-file-medical me-2"></i>Primary Source Context:
+                        </div>
+                        <pre>${data.primary_source_document}</pre>
+                    </div>
+                    
+                    <div class="source-info">
+                        <div class="source-label">
+                            <i class="fas fa-book-medical me-2"></i>Primary Source Document:
+                        </div>
+                        <strong>${data.primary_doc}</strong>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('sidePanel').classList.add('active')">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            View Detailed Retrieval Analysis (${data.total_retrievals} documents)
+                        </button>
+                    </div>
+                `;
+
+                // Update side panel with detailed retrieval information
+                updateSidePanel(data);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                responseDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Error:</strong> Unable to process your request. Please try again.
+                    </div>
+                `;
+            }
+        });
+
+        // Allow Enter key to submit (Shift+Enter for new line)
+        document.getElementById('userInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('submitBtn').click();
+            }
+        });
+    </script>
+</body>
+</html>
