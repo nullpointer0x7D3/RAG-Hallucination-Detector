@@ -1,3 +1,9 @@
+import os
+
+# Set environment variables BEFORE any other imports
+os.environ["GIT_PYTHON_REFRESH"] = "quiet"
+os.environ["OPENAI_API_KEY"] = "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"
+
 from langchain import PromptTemplate
 from langchain.llms import Ollama
 from langchain.chains import RetrievalQA
@@ -7,9 +13,10 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.encoders import jsonable_encoder
-from qdrant_client import QdrantClient
-from langchain.vectorstores import Qdrant
-import os
+from langchain.vectorstores import Chroma
+from ragas import evaluate
+from ragas.metrics import faithfulness, answer_relevancy
+from datasets import Dataset
 import json
 
 app = FastAPI()
@@ -57,13 +64,11 @@ Medical Answer:"""
 # Vector Database Setup 
 embeddings = SentenceTransformerEmbeddings(model_name="NeuML/pubmedbert-base-embeddings")
 
-url = "http://localhost:6333"
-
-client = QdrantClient(
-    url=url, prefer_grpc=False
+# Use Chroma as an in-memory vector store (no external service needed)
+db = Chroma(
+    embedding_function=embeddings,
+    collection_name="vector_db"
 )
-
-db = Qdrant(client=client, embeddings=embeddings, collection_name="vector_db")
 
 ################################################################################################################################
 
@@ -71,6 +76,77 @@ prompt = PromptTemplate(template=prompt_template, input_variables=['context', 'q
 
 # Single retriever configuration - now with much larger context window
 retriever = db.as_retriever(search_kwargs={"k":6})  # Get 6 documents with larger context
+
+def calculate_ragas_metrics(question, answer, contexts):
+    """
+    Calculate RAGAS metrics for faithfulness and answer relevancy
+    """
+    try:
+        # Print RAGAS evaluation details in a clean format
+        print("\n" + "="*80)
+        print("RAGAS EVALUATION DETAILS")
+        print("="*80)
+        
+        print(f"QUESTION:")
+        print(f"   {question}")
+        print()
+        
+        print(f"LLM ANSWER:")
+        print(f"   {answer}")
+        print()
+        
+        print(f"CONTEXTS USED ({len(contexts)} documents):")
+        for i, context in enumerate(contexts, 1):
+            print(f"   Document {i}:")
+            # Truncate long contexts for readability
+            if len(context) > 300:
+                print(f"      {context[:300]}...")
+            else:
+                print(f"      {context}")
+            print()
+        
+        # Create dataset for RAGAS evaluation
+        data = [{
+            "question": question,
+            "answer": answer,
+            "contexts": contexts
+        }]
+        
+        dataset = Dataset.from_list(data)
+        
+        print(f"Running RAGAS evaluation...")
+        
+        # Run RAGAS evaluation
+        results = evaluate(
+            dataset,
+            metrics=[faithfulness, answer_relevancy]
+        )
+        
+        # Extract scores (handle both list and single value formats)
+        faithfulness_score = results['faithfulness']
+        if isinstance(faithfulness_score, list):
+            faithfulness_score = faithfulness_score[0] if faithfulness_score else 0
+            
+        answer_relevancy_score = results['answer_relevancy']
+        if isinstance(answer_relevancy_score, list):
+            answer_relevancy_score = answer_relevancy_score[0] if answer_relevancy_score else 0
+        
+        print(f"RAGAS RESULTS:")
+        print(f"   Faithfulness: {faithfulness_score:.3f}")
+        print(f"   Answer Relevancy: {answer_relevancy_score:.3f}")
+        print("="*80)
+        
+        return {
+            'faithfulness': round(faithfulness_score, 3),
+            'answer_relevancy': round(answer_relevancy_score, 3)
+        }
+        
+    except Exception as e:
+        print(f"Error calculating RAGAS metrics: {e}")
+        return {
+            'faithfulness': 0.0,
+            'answer_relevancy': 0.0
+        }
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
@@ -94,6 +170,10 @@ async def get_response(query: str = Form(...)):
     print(response)
     answer = response['result']
     
+    # Get the EXACT documents that were used by the LLM
+    # RetrievalQA returns source_documents in the response
+    llm_used_docs = response.get('source_documents', [])
+    
     # Get the SAME documents that were used in the RAG chain
     retrieval_docs = retriever.get_relevant_documents(query)  # Use the same retriever
     
@@ -110,8 +190,16 @@ async def get_response(query: str = Form(...)):
             "source": doc.metadata.get('source', 'Unknown'),
             "score": float(score),
             "page": doc.metadata.get('page', 'N/A'),
-            "is_primary": i < 2  # Mark first 2 as primary (used in RAG chain)
+            "is_primary": i < len(llm_used_docs)  # Mark as primary if actually used by LLM
         })
+    
+    # Calculate RAGAS metrics using ONLY the documents the LLM actually used
+    contexts = [doc.page_content for doc in llm_used_docs]
+    ragas_metrics = calculate_ragas_metrics(query, answer, contexts)
+    
+    # Add debug info about what the LLM actually used
+    print(f"LLM used {len(llm_used_docs)} documents for RAGAS evaluation")
+    print(f"RAGAS contexts: {len(contexts)}")
     
     response_data = jsonable_encoder(json.dumps({
         "answer": answer,
@@ -119,7 +207,9 @@ async def get_response(query: str = Form(...)):
         "primary_doc": retrieval_docs[0].metadata.get('source', 'Unknown') if retrieval_docs else "",
         "all_retrievals": all_retrievals,
         "query": query,
-        "total_retrievals": len(all_retrievals)
+        "total_retrievals": len(all_retrievals),
+        "ragas_metrics": ragas_metrics,
+        "llm_used_docs_count": len(llm_used_docs)  # Show how many docs LLM actually used
     }))
     
     res = Response(response_data)

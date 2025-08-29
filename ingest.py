@@ -4,7 +4,7 @@ from langchain.vectorstores import Chroma
 from langchain.embeddings import SentenceTransformerEmbeddings
 from langchain.document_loaders import DirectoryLoader
 from langchain.document_loaders import PyPDFLoader # a PDF file parser, outputs chunks | this one does not process images or tables
-from langchain.vectorstores import Qdrant
+
 
 # uses sentencetransformer which is a library to download model weights, no API key needed, caches weights locally.
 embeddings = SentenceTransformerEmbeddings(model_name="NeuML/pubmedbert-base-embeddings") # use relevant medical embedding model 
@@ -26,24 +26,12 @@ print(f"Created {len(texts)} text chunks")
 print(f"Average chunk size: {sum(len(t.page_content) for t in texts) / len(texts):.0f} characters")
 
 # Clear existing database and create new one
-url = "http://localhost:6333"
-from qdrant_client import QdrantClient
-
-client = QdrantClient(url=url, prefer_grpc=False)
-
-# Delete existing collection if it exists
-try:
-    client.delete_collection("vector_db")
-    print("Deleted existing vector_db collection")
-except:
-    print("No existing collection to delete")
+# Use Chroma as an in-memory vector store (no external service needed)
 
 # Create new collection with smaller chunks
-qdrant = Qdrant.from_documents(
+chroma_db = Chroma.from_documents(
     texts,
     embeddings,
-    url=url,
-    prefer_grpc=False,
     collection_name="vector_db"
 )
 

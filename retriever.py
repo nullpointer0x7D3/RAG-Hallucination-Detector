@@ -1,19 +1,14 @@
-from langchain_community.vectorstores import Qdrant
-from langchain_community.embeddings import SentenceTransformerEmbeddings
-from qdrant_client import QdrantClient
+from langchain.vectorstores import Chroma
+from langchain.embeddings import SentenceTransformerEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 embeddings = SentenceTransformerEmbeddings(model_name="NeuML/pubmedbert-base-embeddings") # state same embedding model as ingest.py
 
-url = "http://localhost:6333"
-
-client = QdrantClient( # initialize connection object to Qdrant server
-    url=url, prefer_grpc=False
+# Use Chroma as an in-memory vector store (no external service needed)
+db = Chroma(
+    embedding_function=embeddings,
+    collection_name="vector_db"
 )
-
-print(client)
-print("##############")
-
-db = Qdrant(client=client, embeddings=embeddings, collection_name="vector_db")
 
 print(db)
 print("######")

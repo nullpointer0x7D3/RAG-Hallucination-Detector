@@ -372,7 +372,7 @@
                 <i class="fas fa-stethoscope medical-icon"></i>
                 Medical RAG Hallucination Detector
             </h1>
-            <p class="chat-subtitle">Using RAGAS To Detect Harmful Hallucinations</p>
+            <p class="chat-subtitle">Real-time RAGAS Quality Metrics & Hallucination Detection</p>
         </div>
     </div>
 
@@ -393,7 +393,7 @@
                     <i class="fas fa-database"></i> Qdrant Vector Store
                 </span>
                 <span class="badge-custom">
-                    <i class="fas fa-shield-alt"></i> RAGAS
+                    <i class="fas fa-shield-alt"></i> RAGAS Integrated
                 </span>
             </div>
 
@@ -469,6 +469,20 @@
             if (score >= 0.6) return 'Good Match';
             if (score >= 0.4) return 'Fair Match';
             return 'Poor Match';
+        }
+
+        function getRagasScoreColor(score) {
+            if (score >= 0.8) return 'success';
+            if (score >= 0.6) return 'warning';
+            if (score >= 0.4) return 'info';
+            return 'danger';
+        }
+
+        function getRagasScoreLabel(score) {
+            if (score >= 0.8) return 'Excellent';
+            if (score >= 0.6) return 'Good';
+            if (score >= 0.4) return 'Fair';
+            return 'Poor';
         }
 
         function formatScore(score) {
@@ -581,6 +595,49 @@
                     <div class="mb-3">
                         <h5><i class="fas fa-robot me-2 text-primary"></i>Medical Answer:</h5>
                         <p>${data.answer}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h6><i class="fas fa-shield-alt me-2 text-success"></i>RAGAS Quality Metrics:</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body text-center">
+                                        <h4 class="text-${getRagasScoreColor(data.ragas_metrics.faithfulness)}">${(data.ragas_metrics.faithfulness * 100).toFixed(1)}%</h4>
+                                        <p class="mb-0 fw-bold">Faithfulness</p>
+                                        <small class="text-muted">${getRagasScoreLabel(data.ragas_metrics.faithfulness)}</small>
+                                        <div class="mt-2">
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-${getRagasScoreColor(data.ragas_metrics.faithfulness)}" 
+                                                     style="width: ${(data.ragas_metrics.faithfulness * 100)}%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-0 shadow-sm">
+                                    <div class="card-body text-center">
+                                        <h4 class="text-${getRagasScoreColor(data.ragas_metrics.answer_relevancy)}">${(data.ragas_metrics.answer_relevancy * 100).toFixed(1)}%</h4>
+                                        <p class="mb-0 fw-bold">Answer Relevancy</p>
+                                        <small class="text-muted">${getRagasScoreLabel(data.ragas_metrics.answer_relevancy)}</small>
+                                        <div class="mt-2">
+                                            <div class="progress" style="height: 8px;">
+                                                <div class="progress-bar bg-${getRagasScoreColor(data.ragas_metrics.answer_relevancy)}" 
+                                                     style="width: ${(data.ragas_metrics.answer_relevancy * 100)}%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <strong>Faithfulness:</strong> Measures how well the answer is grounded in provided context (higher = less hallucination risk)<br>
+                                <strong>Answer Relevancy:</strong> Measures how relevant the answer is to the question (higher = better question-answer alignment)
+                            </small>
+                        </div>
                     </div>
                     
                     <div class="source-info">
