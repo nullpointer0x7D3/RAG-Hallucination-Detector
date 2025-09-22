@@ -2,7 +2,7 @@ import os
 
 # Set environment variables BEFORE any other imports
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
-os.environ["OPENAI_API_KEY"] = "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"
+os.environ["OPENAI_API_KEY"] = ""
 
 from langchain import PromptTemplate
 from langchain.llms import Ollama
