@@ -2,7 +2,7 @@ import os
 
 # Set environment variables BEFORE any other imports
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
-os.environ["OPENAI_API_KEY"] = "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"
+os.environ["OPENAI_API_KEY"] = "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"
 
 from langchain import PromptTemplate
 from langchain.llms import Ollama
@@ -64,11 +64,61 @@ Medical Answer:"""
 # Vector Database Setup 
 embeddings = SentenceTransformerEmbeddings(model_name="NeuML/pubmedbert-base-embeddings")
 
-# Use Chroma as an in-memory vector store (no external service needed)
-db = Chroma(
-    embedding_function=embeddings,
-    collection_name="vector_db"
-)
+def load_documents_into_db():
+    """Load documents into the vector database"""
+    global db
+    
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    from langchain.document_loaders import DirectoryLoader
+    from langchain.document_loaders import PyPDFLoader
+    
+    print("Loading documents...")
+    loader = DirectoryLoader('Data/', glob="**/*.pdf", show_progress=True, loader_cls=PyPDFLoader)
+    documents = loader.load()
+    print(f"Loaded {len(documents)} documents")
+
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=2500,       # ~1,250 tokens per chunk
+        chunk_overlap=250,      # 10% overlap for continuity
+        separators=["\n\n", "\n", ". ", " ", ""]
+    )
+
+    texts = text_splitter.split_documents(documents)
+    print(f"Created {len(texts)} text chunks")
+    print(f"Average chunk size: {sum(len(t.page_content) for t in texts) / len(texts):.0f} characters")
+
+    # Create new database with documents
+    db = Chroma.from_documents(
+        texts,
+        embeddings,
+        collection_name="vector_db",
+        persist_directory="./chroma_db"  # Persist to disk
+    )
+    
+    print("Vector DB Successfully Created!")
+    print(f"Total chunks in database: {len(texts)}")
+
+# Try to load existing database, or create new one if it doesn't exist
+try:
+    # Try to load existing database
+    db = Chroma(
+        embedding_function=embeddings,
+        collection_name="vector_db",
+        persist_directory="./chroma_db"  # Persist to disk
+    )
+    
+    # Check if database has documents
+    existing_docs = db.similarity_search("test", k=1)
+    if len(existing_docs) == 0:
+        print("No documents found in existing database. Loading documents...")
+        load_documents_into_db()
+    else:
+        print(f"Loaded existing database with documents")
+        
+except Exception as e:
+    print(f"Could not load existing database: {e}")
+    print("Creating new database and loading documents...")
+    load_documents_into_db()
 
 ################################################################################################################################
 
